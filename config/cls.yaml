@@ -1,14 +1,15 @@
 batch_size: 16
 epoch: 200
-learning_rate: 1e-3
+learning_rate: 0.05
 gpu: 1
 num_point: 1024
-optimizer: Adam
+optimizer: Sgd
 weight_decay: 1e-4
 normal: True
 
 defaults:
-  - model: Menghao
+  - _self_
+  - model: Hengshuang
 
 hydra:
   run:

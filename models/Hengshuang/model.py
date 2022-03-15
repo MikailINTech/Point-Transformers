@@ -61,7 +61,7 @@ class Backbone(nn.Module):
         for i in range(nblocks):
             channel = 32 * 2 ** (i + 1)
             self.transition_downs.append(TransitionDown(npoints // 4 ** (i + 1), nneighbor, [channel // 2 + 3, channel, channel]))
-            self.transformers.append(TransformerBlock(channel, cfg.model.transformer_dim, nneighbor))
+            self.transformers.append(TransformerBlock(channel, int(cfg.model.transformer_dim / (2**(nblocks - (i+1)))), nneighbor))
         self.nblocks = nblocks
     
     def forward(self, x):

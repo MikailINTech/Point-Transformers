@@ -41,6 +41,12 @@ def test(model, loader, num_class=40):
     return instance_acc, class_acc
 
 
+def adjust_optim(optimizer, epoch,logger):
+    if epoch in [120,160] :
+        optimizer.param_groups[0]['lr'] *= 0.1
+        logger.info(f"lr has been set to {optimizer.param_groups[0]['lr']}")
+
+
 @hydra.main(config_path='config', config_name='cls')
 def main(args):
     omegaconf.OmegaConf.set_struct(args, False)
@@ -49,23 +55,23 @@ def main(args):
     os.environ["CUDA_VISIBLE_DEVICES"] = str(args.gpu)
     logger = logging.getLogger(__name__)
 
-    print(args.pretty())
-
     '''DATA LOADING'''
     logger.info('Load dataset ...')
     DATA_PATH = hydra.utils.to_absolute_path('modelnet40_normal_resampled/')
 
     TRAIN_DATASET = ModelNetDataLoader(root=DATA_PATH, npoint=args.num_point, split='train', normal_channel=args.normal)
     TEST_DATASET = ModelNetDataLoader(root=DATA_PATH, npoint=args.num_point, split='test', normal_channel=args.normal)
-    trainDataLoader = torch.utils.data.DataLoader(TRAIN_DATASET, batch_size=args.batch_size, shuffle=True, num_workers=4)
-    testDataLoader = torch.utils.data.DataLoader(TEST_DATASET, batch_size=args.batch_size, shuffle=False, num_workers=4)
+    trainDataLoader = torch.utils.data.DataLoader(TRAIN_DATASET, batch_size=args.batch_size, shuffle=True, num_workers=2)
+    testDataLoader = torch.utils.data.DataLoader(TEST_DATASET, batch_size=args.batch_size, shuffle=False, num_workers=2)
 
     '''MODEL LOADING'''
     args.num_class = 40
     args.input_dim = 6 if args.normal else 3
     shutil.copy(hydra.utils.to_absolute_path('models/{}/model.py'.format(args.model.name)), '.')
 
+    print(torch.cuda.is_available())
     classifier = getattr(importlib.import_module('models.{}.model'.format(args.model.name)), 'PointTransformerCls')(args).cuda()
+    
     criterion = torch.nn.CrossEntropyLoss()
 
     try:
@@ -87,9 +93,9 @@ def main(args):
             weight_decay=args.weight_decay
         )
     else:
-        optimizer = torch.optim.SGD(classifier.parameters(), lr=0.01, momentum=0.9)
+        optimizer = torch.optim.SGD(classifier.parameters(), lr=args.learning_rate, momentum=0.9,weight_decay=args.weight_decay)
 
-    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=50, gamma=0.3)
+    #scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=50, gamma=0.3)
     global_epoch = 0
     global_step = 0
     best_instance_acc = 0.0
@@ -101,6 +107,7 @@ def main(args):
     logger.info('Start training...')
     for epoch in range(start_epoch,args.epoch):
         logger.info('Epoch %d (%d/%s):' % (global_epoch + 1, epoch + 1, args.epoch))
+        adjust_optim(optimizer, epoch,logger)
         
         classifier.train()
         for batch_id, data in tqdm(enumerate(trainDataLoader, 0), total=len(trainDataLoader), smoothing=0.9):
@@ -124,7 +131,7 @@ def main(args):
             optimizer.step()
             global_step += 1
             
-        scheduler.step()
+        #scheduler.step()
 
         train_instance_acc = np.mean(mean_correct)
         logger.info('Train Instance Accuracy: %f' % train_instance_acc)
@@ -144,7 +151,7 @@ def main(args):
 
             if (instance_acc >= best_instance_acc):
                 logger.info('Save model...')
-                savepath = 'best_model.pth'
+                savepath = '/content/gdrive/MyDrive/Point-Transformers'
                 logger.info('Saving at %s'% savepath)
                 state = {
                     'epoch': best_epoch,
@@ -157,6 +164,7 @@ def main(args):
             global_epoch += 1
 
     logger.info('End of training...')
+
 
 if __name__ == '__main__':
     main()
