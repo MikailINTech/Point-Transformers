@@ -1,4 +1,7 @@
 nneighbor: 16
 nblocks: 4
 transformer_dim: 512
+positional_encoding : True
+norm : False
+activation : ReLU
 name: Hengshuang

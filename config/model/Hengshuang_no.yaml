@@ -1,0 +1,7 @@
+nneighbor: 16
+nblocks: 4
+transformer_dim: 512
+positional_encoding : False
+norm : True
+activation : swish
+name: Hengshuang

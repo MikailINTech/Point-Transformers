@@ -93,8 +93,8 @@ class PointTransformerCls(nn.Module):
     def forward(self, x):
         points, _ = self.backbone(x)
         res = self.fc2(points.mean(1))
-        return res
-
+        return nn.LogSoftmax(dim=1)(res)
+ 
 
 class PointTransformerSeg(nn.Module):
     def __init__(self, cfg):

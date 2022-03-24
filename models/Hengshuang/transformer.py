@@ -5,24 +5,32 @@ import torch.nn.functional as F
 import numpy as np
 
 class TransformerBlock(nn.Module):
-    def __init__(self, d_points, d_model, k) -> None:
+    def __init__(self, d_points, d_model, k , positional_encoding = True , norm = False , activation = 'ReLU') -> None:
         super().__init__()
         self.fc1 = nn.Linear(d_points, d_model)
         self.fc2 = nn.Linear(d_model, d_points)
+        self.activation = nn.ReLU()
+        if activation == 'swish':
+          self.activation = nn.SiLU()
         self.fc_delta = nn.Sequential(
             nn.Linear(3, d_model),
-            nn.ReLU(),
+            self.activation,
             nn.Linear(d_model, d_model)
         )
         self.fc_gamma = nn.Sequential(
             nn.Linear(d_model, d_model),
-            nn.ReLU(),
+            self.activation,
             nn.Linear(d_model, d_model)
         )
         self.w_qs = nn.Linear(d_model, d_model, bias=False)
         self.w_ks = nn.Linear(d_model, d_model, bias=False)
         self.w_vs = nn.Linear(d_model, d_model, bias=False)
         self.k = k
+
+        self.batchnorm = nn.BatchNorm1d(d_model)
+        self.positional_encoding = positional_encoding
+        self.no_pos_enc = nn.Linear(3, d_model)
+        self.norm = norm
         
     # xyz: b x n x 3, features: b x n x f
     def forward(self, xyz, features):
@@ -33,13 +41,19 @@ class TransformerBlock(nn.Module):
         pre = features
         x = self.fc1(features)
         q, k, v = self.w_qs(x), index_points(self.w_ks(x), knn_idx), index_points(self.w_vs(x), knn_idx)
-
-        pos_enc = self.fc_delta(xyz[:, :, None] - knn_xyz)  # b x n x k x f
+        
+        if self.positional_encoding :
+          pos_enc = self.fc_delta(xyz[:, :, None] - knn_xyz)  # b x n x k x f
+        else :
+          pos_enc = self.no_pos_enc(xyz[:, :, None] - knn_xyz)
         
         attn = self.fc_gamma(q[:, :, None] - k + pos_enc)
         attn = F.softmax(attn / np.sqrt(k.size(-1)), dim=-2)  # b x n x k x f
         
         res = torch.einsum('bmnf,bmnf->bmf', attn, v + pos_enc)
         res = self.fc2(res) + pre
+
+        if self.norm :
+          res = self.batchnorm(res)
         return res, attn
     
